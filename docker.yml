@@ -1,0 +1,13 @@
+# --- DOCKER HUB COMMANDS ---
+# 1. Pull the universal image
+docker_pull_command: "docker pull nambari/go-kafka-pipeline:latest"
+
+# 2. Run with docker-compose (requires only docker-compose.yml)
+docker_run_command: "docker-compose up -d"
+
+# --- GIT PUSH COMMANDS ---
+# Run these commands to push your changes to your repository
+git_init: "git init" (if first time)
+git_add: "git add ."
+git_commit: "git commit -m 'Finalized high-performance Kafka pipeline'"
+git_push: "git push origin main"

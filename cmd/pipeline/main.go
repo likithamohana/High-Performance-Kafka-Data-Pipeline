@@ -25,6 +25,20 @@ var (
 )
 
 // Topics: created in createTopics — source (sharded), id/name/continent (single partition, globally sorted).
+func deleteTopics(b string, topics ...string) {
+	conn, err := kafka.Dial("tcp", b)
+	if err != nil {
+		log.Printf("Failed dial for deletion: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if err := conn.DeleteTopics(topics...); err != nil {
+		// Topic might not exist, that's fine
+	}
+	time.Sleep(2 * time.Second) // Wait for deletion to propagate
+}
+
 func createTopics(b string, topicPartitions map[string]int) {
 	conn, err := kafka.Dial("tcp", b)
 	if err != nil {
@@ -50,16 +64,16 @@ func createTopics(b string, topicPartitions map[string]int) {
 	time.Sleep(1 * time.Second)
 }
 
-func verifyTop20(b, topic string) {
+func printSampleRecords(b, topic string) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{b}, Topic: topic, Partition: 0, MinBytes: 10e3, MaxBytes: 10e6,
 	})
 	defer reader.Close()
 
-	fmt.Printf("\n--- Sample lines (id,name,continent) from [%s] ---\n", topic)
+	fmt.Printf("\n--- [Output Sample] First 10 records from globally sorted topic [%s] ---\n", topic)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 10; i++ {
 		m, err := reader.ReadMessage(ctx)
 		if err != nil {
 			break
@@ -67,7 +81,7 @@ func verifyTop20(b, topic string) {
 		// Intercept the raw 4-column CSV and strip out Address just for printing
 		rec, err := models.FromCSV(string(m.Value))
 		if err == nil {
-			fmt.Printf("%d,%s,%s\n", rec.ID, rec.Name, rec.Continent)
+			fmt.Printf(" #%d: ID=%d | Name=%s | Continent=%s\n", i+1, rec.ID, rec.Name, rec.Continent)
 		} else {
 			// Fallback if parsing fails
 			fmt.Println(string(m.Value))
@@ -76,22 +90,27 @@ func verifyTop20(b, topic string) {
 }
 
 func main() {
+
 	flag.Parse()
 
 	log.SetFlags(0)
 	ctx := context.Background()
 	start := time.Now()
-
-	createTopics(*broker, map[string]int{
-		"source":    *sourcePartitions,
-		"id":        1,
-		"name":      1,
-		"continent": 1,
-	})
-
 	switch strings.ToLower(*mode) {
 	case "full":
 		log.Println("Running Full Pipeline...")
+
+		// Ensure a clean state for "Exactly 50M" guarantee
+		log.Println("Cleaning up topics for a fresh start...")
+		deleteTopics(*broker, "source", "id", "name", "continent")
+
+		createTopics(*broker, map[string]int{
+			"source":    *sourcePartitions,
+			"id":        1,
+			"name":      1,
+			"continent": 1,
+		})
+
 		genStart := time.Now()
 		if err := source.GenerateAndPublish(ctx, *broker, "source", *totalRecords, *concurrency); err != nil {
 			log.Fatalf("Generation failed: %v", err)
@@ -124,12 +143,19 @@ func main() {
 		fmt.Println("   (Extract using: docker cp <container_name>:/app/data/pipeline.log .)")
 		fmt.Println()
 
-		verifyTop20(*broker, "id")
-		verifyTop20(*broker, "name")
-		verifyTop20(*broker, "continent")
+		printSampleRecords(*broker, "id")
+		printSampleRecords(*broker, "name")
+		printSampleRecords(*broker, "continent")
 
 	case "generate":
 		log.Println("Mode: generate → topic source only")
+		log.Println("Cleaning up source topic for a fresh start...")
+		deleteTopics(*broker, "source")
+
+		createTopics(*broker, map[string]int{
+			"source": *sourcePartitions,
+		})
+
 		if err := source.GenerateAndPublish(ctx, *broker, "source", *totalRecords, *concurrency); err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
@@ -141,10 +167,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("Processing failed: %v", err)
 		}
-		
+
 		totalDuration := time.Since(start)
 		sorterTotal := ingestDuration + mergeDuration
-		
+
 		fmt.Println("\n✅ Pipeline execution finished successfully.")
 		fmt.Println("\n+----------------------------------------------------------------------+")
 		fmt.Println("|         PROCESSOR ENGINE PERFORMANCE MATRIX (WALL-CLOCK)             |")

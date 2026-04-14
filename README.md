@@ -1,34 +1,26 @@
-# High-Performance Kafka Data Pipeline
+# 🚀 High-Performance Kafka Data Pipeline
 
 A production-ready, highly optimized data engineering pipeline built in **Go (Golang)**. This system generates 50 million records, streams them through Apache Kafka, and performs an external n-way merge sort while strictly adhering to hardware constraints (2GB RAM / 4 CPU Cores).
 
-## 📋 Table of Contents
-1. [Project Overview](#project-overview)
-2. [Architecture & Workflow](#architecture--workflow)
-3. [Hardware Constraints & Optimizations](#hardware-constraints--optimizations)
-4. [Project Structure](#project-structure)
-5. [Step-by-Step Setup & Execution](#step-by-step-setup--execution)
-6. [Verification](#verification)
-7. [Algorithm Details](#algorithm-details)
-8. [Performance & Scaling](#performance--scaling)
+---
+
+## Quick Start (Docker Hub)
+You can run this entire pipeline using only the `docker-compose.yml` file.
+
+1.  **Download it**: `curl -O https://raw.githubusercontent.com/YOUR_USERNAME/go-kafka-pipeline/main/docker-compose.yml`
+2.  **Pull the Image**: `docker pull nambari/go-kafka-pipeline:latest`
+3.  **Run**: `docker-compose up -d`
 
 ---
 
-## Project Overview
+## Tech Stack & Justifications
 
-This pipeline is designed to handle massive data processing under extreme resource limitations. It performs the following:
-1. **Generates** 50 million lines of random CSV data.
-2. **Publishes** data to a Kafka topic called `source`.
-3. **Consumes** and **Sorts** the data three different ways (by ID, Name, and Continent).
-4. **Publishes** sorted results to three separate Kafka topics (`id`, `name`, `continent`).
-
-### Data Schema
-| Column | Type | Description |
+| Technology | Role | Why? |
 | :--- | :--- | :--- |
-| **id** | `int32` | 32-bit integer |
-| **name** | `string` | English letters only (10-15 chars) |
-| **address** | `string` | Alphanumeric (15-20 chars) |
-| **Continent**| `string` | One of 6 predefined continents |
+| **Go (Golang)** | Processing Engine | High performance, minimal memory overhead, and native concurrency for sharded processing. |
+| **Apache Kafka**| Streaming Layer | Decouples data generation from sorting; provides durable, sharded message persistence. |
+| **Zookeeper** | Coordination | Manages Kafka cluster metadata and leader elections. |
+| **Docker** | Orchestration | Ensures consistent environment variables and strictly enforces hardware resource limits. |
 
 ---
 
@@ -39,123 +31,107 @@ The system utilizes an **N-Way External Merge Sort** algorithm to process data l
 ![Architecture Diagram](./docs/architecture.png)
 
 ### The Lifecycle of Data:
-1. **Generation (Record Generator)**: 50M records are streamed into Kafka.
-2. **Chunking (Ingestion)**: Data is consumed in 1M-record chunks, sorted in RAM (using `pdqsort`), and spilled to disk as temporary CSV files.
+1. **Generation (Record Generator)**: 50M records are sharded across 4 parallel workers and streamed into Kafka.
+2. **Chunking (Ingestion)**: Data is consumed in 5M-record chunks, sorted in RAM (using `pdqsort`), and spilled to disk as temporary CSV files.
 3. **N-Way Merge (Sorter)**: The system opens all chunk files simultaneously and uses a **Min-Heap (Priority Queue)** to stream globally sorted records back to Kafka.
 
 ---
 
-## Hardware Constraints & Optimizations
+## Performance Optimizations
 
-This project was built to run inside a strictly limited container:
-* **RAM Limit**: 2 GB (Total cluster: Zookeeper + Kafka + Go App)
-* **CPU Limit**: 4 Cores
+### CPU Utilization (4 Cores)
+*   **Parallelism**: 4 worker goroutines match the 4-CPU cluster, ensuring 100% core utilization during peak generation.
+*   **GOMAXPROCS=3**: We cap the Go scheduler to 3 CPUs to leave 1 dedicated core for Kafka and Zookeeper background processes, preventing context-switching bottlenecks.
+*   **Buffered Writing**: Kafka messages are published in batches of 20,000 to minimize I/O syscalls.
 
-### How we handle the limits:
-* **Sequential Merges**: To prevent memory spikes, the three output topics (`id`, `name`, `continent`) are processed **sequentially**, ensuring the k-way merge buffers never exceed the 2GB limit.
-* **Aggressive Garbage Collection**: The Go runtime is manually triggered after every chunk flush and between merge phases to reclaim memory.
-* **Memory Pooling**: Byte buffers are reused to minimize allocation overhead.
-* **Disk Spilling**: By treating the SSD as temporary RAM, we can sort 5-8GB of data while only using ~300MB of active app heap.
+### Memory Utilization (2 GB RAM)
+*   **External Sort**: By treating local SSD as temporary RAM, we process 50M records (~7.5GB data) while keeping the active heap under 1GB.
+*   **GOGC=50**: We use a custom Garbage Collection target to reclaim memory more aggressively during the ingestion phase.
+*   **Manual Disposal**: After each 5M record chunk is flushed to disk, we trigger a manual `runtime.GC()` and clear slices to ensure memory stability.
 
 ![Docker Resource Usage](./docs/docker-resources.png)
 
 ---
 
-## 📂 Project Structure
+## Deployment Guide
+
+### A. Minimal Setup (Docker Only)
+If you want to run the pipeline without cloning the full source code, you only need the `docker-compose.yml` file.
+
+1.  **Download the configuration**:
+    ```bash
+    curl -O https://raw.githubusercontent.com/YOUR_USERNAME/go-kafka-pipeline/main/docker-compose.yml
+    ```
+2.  **Pull the Image**:
+    ```bash
+    docker pull nambari/go-kafka-pipeline:latest
+    ```
+3.  **Start the Cluster**:
+    ```bash
+    docker-compose up -d
+    ```
+
+---
+
+### B. Full Source Deployment
+1.  **Clone & Build**:
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/go-kafka-pipeline.git
+    cd go-kafka-pipeline
+    docker-compose up -d --build
+    ```
+
+---
+
+## Docker Hub Information
+
+The project is published as a unified, single-image stack. This image contains Zookeeper, Kafka, and the Go App, all orchestrated to start in the correct sequence.
+
+*   **Image Name**: `nambari/go-kafka-pipeline:latest`
+*   **To Pull**: `docker pull nambari/go-kafka-pipeline:latest`
+*   **To Run**: Handled automatically by `docker-compose up`.
+
+---
+
+## Verification Summary
+
+Once the logs indicate "Pipeline execution is complete!", verify your results using these commands:
+
+![Verification Output](./docs/verify.png)
+
+1.  **Automated Integrity Check**:
+    ```bash
+    docker-compose exec app /app/verify.sh
+    ```
+2.  **Sample Final Output (ID Sort)**:
+    ```bash
+    docker-compose exec app /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic id --from-beginning --max-messages 10
+    ```
+3.  **App Verification Mode**:
+    ```bash
+    docker-compose exec app /app/kafka-sort -mode=verify
+    ```
+
+---
+
+## Project Structure
 
 ```text
 go-kafka-pipeline/
 ├── cmd/
 │   └── pipeline/
 │       └── main.go         # Entry point (modes: full, generate, process, verify)
-├── models/
-│   └── record.go           # Data schema and CSV logic
 ├── sort/
 │   ├── chunk_sort.go       # Local sorting and disk spilling
 │   ├── merge.go            # Min-Heap N-Way merge logic
-│   ├── processor.go        # Orchestrates the ingestion and merge phases
-│   └── verify.go           # Logical verification of output topics
+│   └── processor.go        # Orchestrates the ingestion and merge phases
 ├── source/
 │   └── generator.go        # Fast concurrent record generation
-├── scripts/
-│   ├── entrypoint.sh       # Container bootstrapper and tuning
-│   └── verify.sh           # Convenience script for quick inspection
-├── docs/                   # Project screenshots and diagrams
-├── docker-compose.yml      # Orchestrates Zookeeper, Kafka, and the App
-├── Dockerfile              # Multi-stage build for the Go application
-└── README.md
+├── docker-compose.yml      # Pre-configured for Docker Hub usage
+├── Dockerfile              # Multi-stage build (if building from source)
+├── docker.yml              # Commands for Docker deployment
+└── docker-resources.yml    # Hardware utilization summary
 ```
 
 ---
-
-## Step-by-Step Setup & Execution
-
-### 1. Build the Application
-```bash
-docker-compose build
-```
-
-### 2. Start the Pipeline
-```bash
-docker-compose up -d
-```
-
-### 3. Monitor Progress
-You can watch the logs in real-time to see the progress:
-```bash
-docker-compose logs -f app
-```
-![Pipeline Matrix](./docs/pipeline.png)
-
----
-
-## Verification
-
-Once the logs indicate "Pipeline execution is complete!", you can verify the results.
-
-### Automated Verification
-```bash
-docker-compose exec app /app/verify.sh
-```
-![Verification Output](./docs/output.png)
-
-### Manual Inspection
-```bash
-docker-compose exec app /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic id --from-beginning --max-messages 10
-```
-
----
-
-## Algorithm Details
-
-### Segment 1: High-Speed Production
-* Generates synthetic records locally.
-* Uses multi-worker goroutines to publish to Kafka in batches of 10,000.
-* Optimized for high throughput to fill the `source` topic rapidly.
-
-### Segment 2: External Merge Sort
-* **Phase 1 (Chunking)**: Reads records from Kafka into a 1-million record buffer. Each buffer is sorted locally and written to disk. This ensures we never hold more than 1M records in RAM at any given time.
-* **Phase 2 (N-Way Merge)**: Simultaneously reads the first record from every chunk file. Uses a Min-Heap to determine the smallest value, writes it to the output Kafka topic, and pulls the next record from the corresponding file.
-
----
-
-## Performance & Scaling
-
-### Current Performance (50M Records)
-- **Generation Phase**: 3m 58s
-- **Disk Spilling**: 2m 14s
-- **Final Merge**: 8m 51s
-- **Total Absolute Execution**: **15m 04s**
-
-![Docker Containers](./docs/docker-containers.png)
-
-### Bottlenecks
-* **Disk I/O**: The system is heavily dependent on SSD speed because it treats the disk as temporary RAM.
-* **Network Throughput**: Kafka serialization and network overhead factor in when moving 50M records twice.
-
-### Future Scaling
-* **Vertical Scaling**: Increasing RAM would allow for larger chunks, reducing disk I/O.
-* **Horizontal Scaling**: Partitioning the work across multiple Sorter containers would allow parallel merges across different key ranges.
-
----
-**👨‍💻 Author**: Likitha
+** Author**: Likitha

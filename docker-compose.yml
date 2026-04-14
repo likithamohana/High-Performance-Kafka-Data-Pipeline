@@ -1,9 +1,10 @@
 services:
   app:
-    build: .
+    # Use the pre-built image from Docker Hub for quick deployment without source code
+    image: nambari/go-kafka-pipeline:latest
     container_name: kafka-sort
     deploy:
       resources:
         limits:
           cpus: '4.0'
-          memory: 2G
+          memory: 2.0G
