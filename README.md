@@ -1,17 +1,6 @@
-# 🚀 High-Performance Kafka Data Pipeline
+# High-Performance Kafka Data Pipeline
 
 A production-ready, highly optimized data engineering pipeline built in **Go (Golang)**. This system generates 50 million records, streams them through Apache Kafka, and performs an external n-way merge sort while strictly adhering to hardware constraints (2GB RAM / 4 CPU Cores).
-
----
-
-## Quick Start (Docker Hub)
-You can run this entire pipeline using only the `docker-compose.yml` file.
-
-1.  **Download it**: `curl -O https://raw.githubusercontent.com/YOUR_USERNAME/go-kafka-pipeline/main/docker-compose.yml`
-2.  **Pull the Image**: `docker pull nambari/go-kafka-pipeline:latest`
-3.  **Run**: `docker-compose up -d`
-
----
 
 ## Tech Stack & Justifications
 
@@ -132,6 +121,16 @@ go-kafka-pipeline/
 ├── docker.yml              # Commands for Docker deployment
 └── docker-resources.yml    # Hardware utilization summary
 ```
+
+---
+
+
+## Quick Start (Docker Hub)
+You can run this entire pipeline using only the `docker-compose.yml` file.
+
+1.  **Download it**: `curl -O https://raw.githubusercontent.com/YOUR_USERNAME/go-kafka-pipeline/main/docker-compose.yml`
+2.  **Pull the Image**: `docker pull nambari/go-kafka-pipeline:latest`
+3.  **Run**: `docker-compose up -d`
 
 ---
 ** Author**: Likitha
