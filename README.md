@@ -2,14 +2,16 @@
 
 A production-ready, highly optimized data engineering pipeline built in **Go (Golang)**. This system generates 50 million records, streams them through Apache Kafka, and performs an external n-way merge sort while strictly adhering to hardware constraints (2GB RAM / 4 CPU Cores).
 
-## Tech Stack & Justifications
+---
 
-| Technology | Role | Why? |
-| :--- | :--- | :--- |
-| **Go (Golang)** | Processing Engine | High performance, minimal memory overhead, and native concurrency for sharded processing. |
-| **Apache Kafka**| Streaming Layer | Decouples data generation from sorting; provides durable, sharded message persistence. |
-| **Zookeeper** | Coordination | Manages Kafka cluster metadata and leader elections. |
-| **Docker** | Orchestration | Ensures consistent environment variables and strictly enforces hardware resource limits. |
+## Tech Stack
+
+| Technology | Role |
+| :--- | :--- |
+| **Go (Golang)** | Processing Engine |
+| **Apache Kafka**| Streaming Layer |
+| **Zookeeper** | Coordination |
+| **Docker** | Orchestration |
 
 ---
 
@@ -49,7 +51,7 @@ If you want to run the pipeline without cloning the full source code, you only n
 
 1.  **Download the configuration**:
     ```bash
-    curl -O https://raw.githubusercontent.com/YOUR_USERNAME/go-kafka-pipeline/main/docker-compose.yml
+    curl -O https://raw.githubusercontent.com/likithamohana/go-kafka-pipeline/main/docker-compose.yml
     ```
 2.  **Pull the Image**:
     ```bash
@@ -65,7 +67,7 @@ If you want to run the pipeline without cloning the full source code, you only n
 ### B. Full Source Deployment
 1.  **Clone & Build**:
     ```bash
-    git clone https://github.com/YOUR_USERNAME/go-kafka-pipeline.git
+    git clone https://github.com/likithamohana/go-kafka-pipeline.git
     cd go-kafka-pipeline
     docker-compose up -d --build
     ```
@@ -101,6 +103,8 @@ Once the logs indicate "Pipeline execution is complete!", verify your results us
     docker-compose exec app /app/kafka-sort -mode=verify
     ```
 
+![Verification Detailed Output](./docs/output.png)
+
 ---
 
 ## Project Structure
@@ -124,13 +128,12 @@ go-kafka-pipeline/
 
 ---
 
-
 ## Quick Start (Docker Hub)
 You can run this entire pipeline using only the `docker-compose.yml` file.
 
-1.  **Download it**: `curl -O https://raw.githubusercontent.com/YOUR_USERNAME/go-kafka-pipeline/main/docker-compose.yml`
+1.  **Download it**: `curl -O https://raw.githubusercontent.com/likithamohana/go-kafka-pipeline/main/docker-compose.yml`
 2.  **Pull the Image**: `docker pull nambari/go-kafka-pipeline:latest`
 3.  **Run**: `docker-compose up -d`
 
 ---
-** Author**: Likitha
+**Author**: Likitha
