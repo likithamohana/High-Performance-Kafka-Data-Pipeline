@@ -44,6 +44,11 @@ The system utilizes an **N-Way External Merge Sort** algorithm to process data l
 
 ---
 
+## Scaling: More Data and More Machines (Bonus)
+ 
+If the dataset and the cluster both grow, I would keep Kafka as the **fan-out / shuffle** (multi-broker, many partitions) and **stop doing one global N-way merge on a single host**. Instead, use **key-range partitioning** (TeraSort-style: sample, bucket by `id` or hash-prefix for `name`/`continent`, repartition, sort **locally** on each node, then read buckets in order for a full global order). If each node still can’t hold a pass in memory, add **cascade (multi-level) external merge** on that node. For extremely large or continuous loads, a managed **Flink/Spark** sort-shuffle is the practical default; add metrics on lag and per-phase I/O to verify where the bottleneck is.
+ 
+
 ## Deployment Guide
 
 ### A. Minimal Setup (Docker Only)
