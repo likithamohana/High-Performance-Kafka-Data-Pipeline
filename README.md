@@ -23,7 +23,7 @@ The system utilizes an **N-Way External Merge Sort** algorithm to process data l
 
 ### The Lifecycle of Data:
 1. **Generation (Record Generator)**: 50M records are sharded across 4 parallel workers and streamed into Kafka.
-2. **Chunking (Ingestion)**: Data is consumed in 5M-record chunks, sorted in RAM (using `pdqsort`), and spilled to disk as temporary CSV files.
+2. **Chunking (Ingestion)**: Data is consumed in 1M-record chunks, sorted in RAM (using `pdqsort`), and spilled to disk as temporary CSV files.
 3. **N-Way Merge (Sorter)**: The system opens all chunk files simultaneously and uses a **Min-Heap (Priority Queue)** to stream globally sorted records back to Kafka.
 
 ---
@@ -38,13 +38,13 @@ The system utilizes an **N-Way External Merge Sort** algorithm to process data l
 ### Memory Utilization (2 GB RAM)
 *   **External Sort**: By treating local SSD as temporary RAM, we process 50M records (~7.5GB data) while keeping the active heap under 1GB.
 *   **GOGC=50**: We use a custom Garbage Collection target to reclaim memory more aggressively during the ingestion phase.
-*   **Manual Disposal**: After each 5M record chunk is flushed to disk, we trigger a manual `runtime.GC()` and clear slices to ensure memory stability.
+*   **Manual Disposal**: After each 1M record chunk is flushed to disk, we trigger a manual `runtime.GC()` and clear slices to ensure memory stability.
 
 ![Docker Resource Usage](./docs/docker-resources.png)
 
 ---
 
-## Scaling: More Data and More Machines (Bonus)
+## Scaling: More Data and More Machines
  
 If the dataset and the cluster both grow, I would keep Kafka as the **fan-out / shuffle** (multi-broker, many partitions) and **stop doing one global N-way merge on a single host**. Instead, use **key-range partitioning** (TeraSort-style: sample, bucket by `id` or hash-prefix for `name`/`continent`, repartition, sort **locally** on each node, then read buckets in order for a full global order). If each node still can’t hold a pass in memory, add **cascade (multi-level) external merge** on that node. For extremely large or continuous loads, a managed **Flink/Spark** sort-shuffle is the practical default; add metrics on lag and per-phase I/O to verify where the bottleneck is.
  
